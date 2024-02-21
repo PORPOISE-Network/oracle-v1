@@ -4,6 +4,7 @@ import {
 } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
+import crypto from "crypto";
 import { getAddress, parseGwei,  } from "viem";
 
 describe("Porpacle", function () {
@@ -46,6 +47,23 @@ describe("Porpacle", function () {
       const Resolutions = await porpacle.getEvents.Resolution();
       expect(Resolutions).to.have.lengthOf(1);
       expect(Resolutions[0].args.survey).to.equal(survey);
+    });
+
+    it("Verify a 2 leaf Merkle Tree", async function () {
+      const { porpacle, owner } = await loadFixture(deployPorpacle);
+      const leafA = 'Hello';
+      const leafB = 'World!'
+      const encodedLeafA = Buffer.from(leafA);
+      const encodedLeafB = Buffer.from(leafB);
+
+      const hashedLeafA = crypto.createHash("sha256").update(encodedLeafA).digest();
+      const hashedLeafB = crypto.createHash("sha256").update(encodedLeafB).digest();
+      const root = crypto.createHash("sha256").update(Buffer.concat([hashedLeafA, hashedLeafB])).digest();
+
+      console.log("Hashed Leaf A: ", hashedLeafA.toString('hex'));
+      console.log("Hashed Leaf B: ", hashedLeafB.toString('hex'));
+      console.log("Root: ", root.toString('hex'));
+      expect(await porpacle.read.verify([[`0x${hashedLeafB.toString('hex')}`], `0x${root.toString('hex')}`, `0x${hashedLeafA.toString('hex')}`])).to.equal(true);
     });
   });
 });

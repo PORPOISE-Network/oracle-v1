@@ -34,5 +34,5 @@ with the survey Merkle root being the secondary key.
 
 There are two event types in the PORPOISE Network oracle:
 
-1. `Registration`: emits a log of a new survey root, who registered it, its response deadline (in UTC miliseconds), and the block timestamp when the survey was registered.
+1. `Registration`: emits a log of a new survey root, who registered it, its response deadline (in UTC milliseconds), and the block timestamp when the survey was registered.
 2. `Resolution`: emits a log of a survey root, who recorded it, the outcome string, and the block timestamp of when the result was recorded. 

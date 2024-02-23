@@ -1,5 +1,4 @@
 import crypto from "crypto";
-import hre from "hardhat";
 
 export function ethHexString(myBuffer: Buffer): `0x${string}` { return `0x${myBuffer.toString('hex')}`; }
 

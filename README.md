@@ -20,7 +20,8 @@ To register a survey, call the [`registerSurvey`](/contracts/Porpacle.sol#L42) m
 The oracle contract is intended to be completely permissionless, anyone can write to it. However, event results are cataloged by the address which calls
 [`recordResult`](/contracts/Porpacle.sol#L53). Hence, if bounties are offered for specific surveys, then those bounties can be tied the the result reported by a specific reporting address. 
 
-When recording the result of a prediction survey, the caller must provide a Merkle proof with their reported value to prove they are submitting a valid option. 
+When recording the result of a prediction survey, the caller must provide a Merkle proof with their reported value to prove they are submitting a valid option (i.e. an 
+option specified with a 🗳️). 
 
 **NOTE**: Once an address has reported the result of a specific survey, its value cannot be changed later. 
 

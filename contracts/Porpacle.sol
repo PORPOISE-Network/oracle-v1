@@ -11,37 +11,60 @@ import "hardhat/console.sol";
 contract Porpacle {
     string[] public domains;
 
+    // @dev helpful datastructure that records a survey root and when it times out
+    // @dev timestamp should be UTC timestamp from new Date().getTime()
+    mapping(bytes32 => uint256) public surveyTimeouts; 
+
     // @dev primary data structure for recording event outcomes with respect to specific surveys
     // @dev maps the address that reports the result to map of surveys and their results
-    mapping(address => mapping(uint256 => Result)) results;
+    mapping(address => mapping(bytes32 => Result)) private results;
 
-    event Resolution(address reporter, uint256 survey, uint256 outcome, uint when);
+    // @dev event to record when a new survey has been registered and by whom
+    event Registration(address indexed reporter, bytes32 indexed survey, uint256 expiration, uint when);
+
+    // @dev event to record when the result of the survey outcome has been resolved and who resolved it
+    event Resolution(address indexed reporter, bytes32 indexed survey, string outcome, uint when);
 
     struct Result {
-        uint256 outcome;
-        uint when;
+        bytes32 outcome;
+        uint256 when;
     }
 
     constructor() {
         domains.push("porpoise.network");
     }
 
-    // @notice This is the primary function of the oracle contract. Anyone may call this method with the observed result of a survey.
-    // @dev surveys are indexed by the Merkle root of their components, outcomes are indicated by the sha256 hash of their text
-    // @param survey the Merkle Root of a prediction survey, should be computed with sha256 hash
-    // @param outcome the sha256 hash of the text representing the outcome of a prediction survey 
-    // TODO: implement logic to insure that the reported outcome is included in the merkle root of the survey (i.e. that it is a valid reported outcome)
-    // TODO: additionally, the logic should also check that msg.sender is the stated oracle address in the prediction survey
-    function recordResult(uint256 survey, uint256 outcome) external {
+    // @notice Anyone may call this method to register a survey and its deadline with the oracle contract.
+    // @dev Surveys are indexed by the Merkle root of their components. The nodes are computed with sha256 (not keccak).
+    // @param proof An array of sha256 hashes needed to prove the deadline belonging to the survey root hash.
+    // @param survey Merkle Root of a prediction survey, MUST be computed with sha256 hash.
+    // @param timeout An integer representing the UTC timestamp (in milliseconds) of when a prediction must be commited.
+    function registerSurvey(bytes32[] memory proof, bytes32 survey, uint256 timeout) external {
+        require(timeout > (block.timestamp + 1 hours)*1000, "Deadline must be at least 1 hour in the future");
+        require(surveyTimeouts[survey] == 0, "Survey already registered");
+        require(verify(proof, survey, sha256(abi.encodePacked(timeout))), "Incorrect timestamp for survey root");
+        surveyTimeouts[survey] = timeout;
+    }
+
+    // @notice Anyone may call this method with the observed result of a survey. It does not bind participants or bounties to respecting this specific result.
+    // @param proof An array of sha256 hashes needed to prove the outcome was a valid option of the survey.
+    // @param survey The Merkle Root of a prediction survey, should be computed with sha256 hash.
+    // @param outcome The sha256 hash of the text representing the outcome of a prediction survey. 
+    function recordResult(bytes32[] memory proof, bytes32 survey, string memory outcome) external {
+        require(surveyTimeouts[survey] > 0, "Survey has not been registered yet.");
+        require(surveyTimeouts[survey] < block.timestamp*1000, "Response deadline has not passed yet.");
         require(results[msg.sender][survey].when == 0, "Result has already been recorded");
-        results[msg.sender][survey] = Result(outcome, block.timestamp);
+
+        bytes32 hashedOutcome = sha256(abi.encodePacked(outcome));
+        require(verify(proof, survey, hashedOutcome), "Incompatible survey outcome.");
+        results[msg.sender][survey] = Result(hashedOutcome, block.timestamp);
         emit Resolution(msg.sender, survey, outcome, block.timestamp);
     }
 
     // @notice This function is used for looking up reported results by reporter address
     // @param reporter the address which reported the result of the survey
     // @param survey the Merkle Root of the target survey
-    function getResultByReporter(address reporter, uint256 survey) external view returns (Result memory result) {
+    function getResultByReporter(address reporter, bytes32 survey) external view returns (Result memory result) {
         return results[reporter][survey];
     }
 
@@ -57,7 +80,9 @@ contract Porpacle {
         revert("Domains cannot be added or removed in testnet");
     }
 
-    function verify(bytes32[] memory proof, bytes32 root, bytes32 leaf) external pure returns (bool) {
+    // @dev This is a Merkle leaf verification method copied from OpenZeppelin but modified by be based on sha256 instead of keccak
+    // @dev The reasoning behing using sha256 is so that hashes can computed directly with standard browser-native crypto APIs
+    function verify(bytes32[] memory proof, bytes32 root, bytes32 leaf) internal pure returns (bool) {
         return processProof(proof, leaf) == root;
     }
 
@@ -73,8 +98,10 @@ contract Porpacle {
         return a < b ? sha256(abi.encodePacked(a, b)) : sha256(abi.encodePacked(b, a));
     }
 
-    function dumbFunction(bytes32 dummy) external pure returns (bytes32) {
-        console.logBytes(abi.encodePacked(dummy));
-        return sha256(abi.encodePacked(dummy));
+    function dumbFunction(bytes32 node1, uint256 time) external pure returns (bytes32) {
+        bytes32 hashedTime = sha256(abi.encodePacked(time));
+        console.logBytes(abi.encodePacked(hashedTime));
+        console.logBytes(abi.encodePacked(node1));
+        return sha256(abi.encodePacked(node1, hashedTime));
     }
 }
